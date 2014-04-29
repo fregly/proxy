@@ -14,7 +14,8 @@
 
 void doit(int fd);
 void read_requesthdrs(rio_t *rp);
-int parse_uri(char* buf, char* host, char* uri, char* version, char* portnm);
+int parse_uri(char* buf, char* host, char* uri, char* version,
+                                     char* portnm, char* htmlfile);
 void serve_static(int fd, char *filename, int filesize);
 void get_filetype(char *filename, char *filetype);
 void serve_dynamic(int fd, char *filename, char *cgiargs);
@@ -78,7 +79,7 @@ void doit(int fd)
     fflush(stdout);
 
     //buf, host, uri, version
-    is_static = parse_uri(buf, host, uri, version, portnm);
+    is_static = parse_uri(buf, host, uri, version, portnm, htmlfile);
     int portn = 80;
     if(strlen(portnm) != 0)
         portn = atoi(portnm);
@@ -86,14 +87,12 @@ void doit(int fd)
 
     Rio_readinitb(&rhdr, hostn); //idk?
 
-    char* host_hdr = "Host: ";
-    strcat(host_hdr, host);
 
-    sscanf(buf, "%s %s %s", method, host, version);
+    sscanf(buf, "%s %s %s", method, uri, version);
     if (strcasecmp(method, "GET")) {
       int clientfd = Open_clientfd_r(host, portn);
-      Rio_writen(clientfd, host_hdr, strlen(host_hdr));
-/*
+/*      Rio_writen(clientfd, request from user, string length of request);
+
         Rio_writen(clientfd, , strlen());
 */
       Rio_writen(clientfd, (void*)user_agent_hdr, strlen(user_agent_hdr));
@@ -181,50 +180,72 @@ void read_requesthdrs(rio_t *rp)
 }
 /* $end read_requesthdrs */
 
-/* example:
- * buf = "GET http://www.aol.com:80/index.html HTTP/1.0";
- *
- * results:
- * host = "www.aol.com"
- * uri: "/index.html"
- * version: "HTTP/1.0"
- * portnm: "80"
+/*
+ * parse_uri - parse URI into filename and CGI args
+ *             return 0 if dynamic content, 1 if static
  */
-
-int parse_uri(char* buf, char* host, char* uri, char* version, char* portnm)
-
+/* $begin parse_uri */
+/*
+int parse_uri(char *uri, char *filename, char *cgiargs)
 {
-    char method[MAXLINE];
-    char url[MAXLINE];
-    char hostaddr[MAXLINE];
-    char resource[MAXLINE];
-    int offset = 7;
-    int urlength;
-    int start;
-    int stat = 1;
-
-    if(buf[strlen(buf)-1] != '/') stat = 1;
-    sscanf(buf, "%s %s %s", method, url, version);
-    urlength = strlen(url);
-    strcpy(hostaddr, url + offset);
-
-    start = strcspn(hostaddr, "/");
-    char* hostname = hostaddr + start;
-    strncpy(host, hostaddr, strcspn(hostaddr, ":"));
-    strncpy(uri, hostname, urlength - start);
-    int portnum = strcspn(hostaddr, ":") + 1;
-    printf("hostaddr: %s\n", hostaddr);
-    strncpy(portnm, hostaddr + portnum, strcspn(hostaddr, "/") -
-            strcspn(hostaddr, ":") - 1);
-    printf("test\n");
-
-    int offset2 = strcspn(hostname, "/") - portnum;
-    if(offset2 < 0)
-        offset2 = 0;
-    strncpy(portnm, resource, offset2);
-    printf("test2\n");
-    return stat;
+    char *ptr;
+    if (!strstr(uri, "cgi-bin")) {  Static content */
+/*	strcpy(cgiargs, "");
+	strcpy(filename, ".");
+	strcat(filename, uri);
+	if (uri[strlen(uri)-1] == '/')
+	    strcat(filename, "home.html");
+	return 1;
+    }
+   else {   Dynamic content */
+/*	ptr = index(uri, '?');
+	if (ptr) {
+	    strcpy(cgiargs, ptr+1);
+	    *ptr = '\0';
+	}
+	else
+	    strcpy(cgiargs, "");
+	strcpy(filename, ".");
+	strcat(filename, uri);
+	return 0;
+    }
 }
+*/
+/* $end parse_uri */
+
+int parse_uri(char* buf, char* host, char* uri, char* version,
+                                     char* portnm, char* htmlfile)
+{
+  char url[MAXLINE];
+  char hostaddr[MAXLINE];
+  char resource[MAXLINE];
+  int offset = 7;
+  int start;
+  int stat = 1;
+
+  if(buf[strlen(buf)-1] != '/') stat = 1;
+
+  sscanf(buf, "%s %s %s", method, url, version);
+  //set hostaddr to the url following "http://"
+  strcpy(hostaddr, url + offset);
+
+  start = strcspn(hostaddr, "/");
+  char* hostname = hostaddr + start;
+  int portnum = strcspn(hostname, ":");
+  strncpy(uri, hostname, portnum);
+  char* portfile = hostname + portnum;
+  int spos = strcspn(portfile, "/");
+  strncpy(portnm, portfile, spos);
+  strcpy(htmlfile, portfile + spos);
+
+  //parse uri
+  strcpy(resource, hostname + portnum);
+  int htmlfilenum = strcspn(resource, "/");
+  strcpy(htmlfile, resource + htmlfilenum);
+  strncpy(portnm, resource, htmlfilenum - portnum);
+  return stat;
+}
+
 
     /*
  * serve_static - copy a file back to the client
